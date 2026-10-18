@@ -46,7 +46,7 @@ boot = """
   box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;pointer-events:none;background:rgba(16,18,26,.94);color:#e8e8ee;font:12px/1.5 monospace;padding:8px 12px;border-top:1px solid #2a2e3d;white-space:pre-wrap';
   document.documentElement.appendChild(box);
   var lines = ['single file: all binaries embedded, online and offline'];
-  function draw() { box.textContent = lines.join('\\n'); }
+  function draw() { box.textContent = lines.join(String.fromCharCode(10)); }
   function say(t) { lines.push(t); draw(); }
   draw();
   var blobs = {};
