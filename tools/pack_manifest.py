@@ -6,7 +6,7 @@ heredoc terminator never terminates, which is exactly how the first pack job die
 import hashlib
 import json
 
-NAMES = ["blender.wasm.zst.00", "blender.wasm.zst.01", "assets.tar.zst", "wgsl-cache.json"]
+NAMES = ["blender.wasm.zst", "assets.tar.zst", "wgsl-cache.json"]
 
 files = {}
 for n in NAMES:
@@ -21,5 +21,5 @@ for n in NAMES:
 
 with open("manifest.json", "w") as out:
     json.dump({"files": files,
-               "serve": {"blender.wasm.zst": ["blender.wasm.zst.00", "blender.wasm.zst.01"]}},
+               "serve": {"blender.wasm.zst": ["blender.wasm.zst"]}},
               out, indent=1)
