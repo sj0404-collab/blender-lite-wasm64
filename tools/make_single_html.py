@@ -46,11 +46,23 @@ boot = """
   box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;pointer-events:none;background:rgba(16,18,26,.94);color:#e8e8ee;font:12px/1.5 monospace;padding:8px 12px;border-top:1px solid #2a2e3d;white-space:pre-wrap';
   document.documentElement.appendChild(box);
   var lines = ['single file: all binaries embedded, online and offline'];
-  function draw() { box.textContent = lines.join(String.fromCharCode(10)); }
+  var NL = String.fromCharCode(10);
+  var full = document.createElement('div');
+  full.style.display = 'none';
+  document.documentElement.appendChild(full);
+  var expanded = false;
+  function draw() {
+    full.textContent = lines.join(NL);
+    box.textContent = expanded ? lines.join(NL) : lines[lines.length - 1] + '  [tap: ' + lines.length + ' lines]';
+  }
+  box.style.pointerEvents = 'auto';
+  box.style.maxHeight = '38vh';
+  box.style.overflow = 'auto';
+  box.addEventListener('click', function () { expanded = !expanded; draw(); });
   function say(t) { lines.push(t); draw(); }
   draw();
   var blobs = {};
-  function decode(name) {
+  async function decode(name) {
     var node = document.getElementById('bin-' + name);
     var b64 = node.textContent;
     node.textContent = '';
@@ -60,6 +72,7 @@ boot = """
     for (var i = 0; i < bin.length; i += 65536) {
       var s = bin.slice(i, i + 65536);
       u8.set(Uint8Array.from(s, function (c) { return c.charCodeAt(0); }), i);
+      if ((i & 4194303) === 0) await new Promise(function (r) { setTimeout(r, 0); });
     }
     return crypto.subtle.digest('SHA-256', u8).then(function (d) {
       var hex = Array.prototype.map.call(new Uint8Array(d), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
@@ -102,12 +115,38 @@ boot = """
       throw err;
     });
   };
+  var lastTick = Date.now();
   setInterval(function () {
+    var now = Date.now();
+    if (now - lastTick > 8000) say('main thread was busy ~' + Math.round((now - lastTick) / 1000) + ' s (sync decompress/index inside the wrapper)');
+    lastTick = now;
     if (!t0) return;
-    var line = 'waiting ' + Math.round((Date.now() - t0) / 1000) + ' s since wasm instantiate start';
+    var line = 'waiting ' + Math.round((now - t0) / 1000) + ' s since wasm instantiate start';
     if (hb < 0) { hb = lines.length; lines.push(line); } else { lines[hb] = line; }
     draw();
   }, 5000);
+  if (navigator.gpu) {
+    var RA = navigator.gpu.requestAdapter.bind(navigator.gpu);
+    navigator.gpu.requestAdapter = function () {
+      say('gpu requestAdapter start');
+      var t = Date.now();
+      return RA().then(function (a) {
+        say('gpu adapter ok in ' + ((Date.now() - t) / 1000).toFixed(1) + ' s');
+        if (a) {
+          var RD = a.requestDevice.bind(a);
+          a.requestDevice = function () {
+            say('gpu requestDevice start');
+            var t2 = Date.now();
+            return RD().then(function (d) {
+              say('gpu device ok in ' + ((Date.now() - t2) / 1000).toFixed(1) + ' s');
+              return d;
+            }, function (e) { say('gpu device FAILED: ' + ((e && e.message) || e)); throw e; });
+          };
+        }
+        return a;
+      }, function (e) { say('gpu adapter FAILED: ' + ((e && e.message) || e)); throw e; });
+    };
+  }
   say('embedded payload: ' + Object.keys(SUMS).join(', '));
 })();
 </script>
