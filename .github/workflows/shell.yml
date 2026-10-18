@@ -59,7 +59,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Mirror the Blender web payload into a release of this repo
-        env: { GH_TOKEN: ${{ github.token }} }
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           if gh api repos/$GITHUB_REPOSITORY/releases/tags/blender-pack-v1 --jq .id >/dev/null 2>&1; then
