@@ -1,5 +1,8 @@
 name: shell
 
+permissions:
+  contents: write
+
 on:
   push: { branches: [ main ] }
   pull_request:
