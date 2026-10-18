@@ -59,7 +59,9 @@ public class PackFetch {
         File manifest = new File(packDir, "manifest.json");
         write(manifest, get(urls.getString("manifest.json")));
         JSONObject files = new JSONObject(new String(readAll(manifest), "UTF-8")).getJSONObject("files");
-        for (String name : files.keys()) {
+        java.util.Iterator<String> names = files.keys();
+        while (names.hasNext()) {
+            String name = names.next();
             JSONObject meta = files.getJSONObject(name);
             long size = meta.getLong("size");
             File dest = new File(packDir, name);
