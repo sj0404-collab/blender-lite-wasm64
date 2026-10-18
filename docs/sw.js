@@ -9,6 +9,42 @@ const PAYLOAD = ['blender.wasm.zst', 'assets.tar.zst', 'wgsl-cache.json', 'manif
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
+function report(clients, msg) {
+  clients.matchAll({ includeUncontrolled: true }).then(function (all) {
+    all.forEach(function (c) { c.postMessage(msg); });
+  });
+}
+
+// Counts payload bytes as the page reads them, so the overlay can show megabytes
+// instead of a bar that appears to stand still.
+function metered(response, name) {
+  var total = Number(response.headers.get('content-length')) || 0;
+  var reader = response.body.getReader();
+  var done = 0, sent = 0;
+  var stream = new ReadableStream({
+    pull: function (controller) {
+      return reader.read().then(function (r) {
+        if (r.done) {
+          report(self.clients, { kind: 'bytes', name: name, done: done, total: total, final: true });
+          controller.close();
+          return;
+        }
+        done += r.value.length;
+        if (done - sent > 262144) {
+          sent = done;
+          report(self.clients, { kind: 'bytes', name: name, done: done, total: total, final: false });
+        }
+        controller.enqueue(r.value);
+      });
+    }
+  });
+  var h = new Headers(response.headers);
+  h.set('Cross-Origin-Opener-Policy', 'same-origin');
+  h.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  h.set('Cross-Origin-Resource-Policy', 'same-origin');
+  return new Response(stream, { status: response.status, statusText: response.statusText, headers: h });
+}
+
 function isolated(response) {
   const h = new Headers(response.headers);
   h.set('Cross-Origin-Opener-Policy', 'same-origin');
@@ -27,12 +63,16 @@ self.addEventListener('fetch', (e) => {
     e.respondWith((async () => {
       const cache = await caches.open('blender-pack-v1');
       const hit = await cache.match(BASE + name);
-      if (hit) return isolated(hit);
+      if (hit) {
+        report(self.clients, { kind: 'cache-hit', name: name, size: Number(hit.headers.get('content-length')) || 0 });
+        return isolated(hit);
+      }
       try {
         const res = await fetch(BASE + name, { mode: 'cors' });
         if (res.ok) {
           cache.put(BASE + name, res.clone());
-          return isolated(res);
+          report(self.clients, { kind: 'cached', name: name, size: Number(res.headers.get('content-length')) || 0 });
+          return metered(res, name);
         }
         return res;
       } catch (err) {

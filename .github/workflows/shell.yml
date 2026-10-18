@@ -89,6 +89,7 @@ jobs:
             --screenshot=pwa.png --dump-dom http://127.0.0.1:8000/ > pwa-dom.html || true
           grep -q "manifest.webmanifest" pwa-dom.html
           grep -q "sw.js" pwa-dom.html
+          grep -q "progress.js" pwa-dom.html
           grep -q "Cross-Origin-Embedder-Policy" docs/sw.js
           test -s docs/icon-512.png
       - uses: actions/upload-artifact@v4

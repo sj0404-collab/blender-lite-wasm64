@@ -147,6 +147,17 @@
       <span class="credit-sep" aria-hidden="true">|</span>
       <a href="https://github.com/heyputer/blender-wasm" target="_blank" rel="noreferrer">GitHub</a>
     </div>
-  <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("sw.js"); }</script>
+  <script src="progress.js" defer></script>
+<script>
+// First visit: the worker is not in control of this document yet, so this document
+// arrived without the COOP/COEP headers and SharedArrayBuffer does not exist in it -
+// the wasm threads can never start, and the loader waits forever saying "Preparing".
+// One reload under the worker's control is what makes the page cross-origin isolated.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").then(function () {
+    if (!navigator.serviceWorker.controller) location.reload();
+  });
+}
+</script>
 </body>
 </html>
