@@ -50,3 +50,38 @@ jobs:
           test "$(stat -c%s "$APK")" -lt 5000000
       - uses: actions/upload-artifact@v4
         with: { name: blender-lite-shell-apk, path: android/app/build/outputs/apk/debug/app-debug.apk }
+
+  pack:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Mirror the Blender web payload into a release of this repo
+        env: { GH_TOKEN: ${{ github.token }} }
+        run: |
+          set -e
+          if gh api repos/$GITHUB_REPOSITORY/releases/tags/blender-pack-v1 --jq .id >/dev/null 2>&1; then
+            echo "pack release already exists"; exit 0
+          fi
+          U=https://developer.puter.com/labs/blender-web
+          mkdir -p pack && cd pack
+          curl -sS -O $U/blender.wasm.zst -O $U/assets.tar.zst -O $U/wgsl-cache.json
+          ls -l
+          split -b 95000000 -d -a 2 blender.wasm.zst bw
+          mv bw00 blender.wasm.zst.00; mv bw01 blender.wasm.zst.01
+          python3 - <<'PY2'
+          import hashlib, json
+          files = {}
+          for n in ["blender.wasm.zst.00", "blender.wasm.zst.01", "assets.tar.zst", "wgsl-cache.json"]:
+              h = hashlib.sha256(); s = 0
+              with open(n, "rb") as f:
+                  for c in iter(lambda: f.read(1 << 20), b""):
+                      h.update(c); s += len(c)
+              files[n] = {"size": s, "sha256": h.hexdigest()}
+              print(n, s, h.hexdigest())
+          json.dump({"files": files,
+                     "serve": {"blender.wasm.zst": ["blender.wasm.zst.00", "blender.wasm.zst.01"]}},
+                    open("manifest.json", "w"), indent=1)
+          PY2
+          gh release create blender-pack-v1 manifest.json blender.wasm.zst.00 blender.wasm.zst.01 assets.tar.zst wgsl-cache.json \
+            --title "Blender web payload mirror" \
+            --notes "Mirror of the puter Blender-web payload (upstream: heyputer/blender-wasm, GPL) so the Android shell can serve it from its own origin when the upstream host is unreachable."

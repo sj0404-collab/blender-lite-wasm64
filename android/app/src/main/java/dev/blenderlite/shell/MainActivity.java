@@ -13,27 +13,24 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.io.File;
+
 /**
- * A shell and nothing else. Blender is not in this APK: the page it opens carries the WebAssembly
- * build, and this activity only provides a browser engine, a capability check and, when that check
- * passes, the launch itself - here, in this WebView, not in some other browser.
+ * A shell and nothing else, but a shell that owns its payload. Blender is not compiled into this
+ * APK - 145 MB of wasm does not belong in one - yet nothing outside this app is required at runtime
+ * either: the payload is fetched once from this project's own release, verified by sha256, kept in
+ * the app's files directory, and served to the WebView from 127.0.0.1 with the COOP and COEP headers
+ * the wasm threads need. After the first fetch the app runs with no network at all.
  *
- * The web build is served by its host with Cross-Origin-Opener-Policy: same-origin and
- * Cross-Origin-Embedder-Policy: require-corp, verified with curl before this was written. Loading
- * that URL directly is therefore enough for crossOriginIsolated to become true and for the wasm
- * threads to start; no local proxy is needed and none is pretended.
- *
- * After the page finishes, the shell reads back what the page itself sees - isolation, WebGPU,
- * canvas count - and prints it in the status line, twice: at once and again after eight seconds, so
- * a blank viewport can be told apart from a build that never booted.
+ * The status line always says what actually happened: probe result, fetch progress in megabytes,
+ * the serving origin, and then what the loaded page reports about itself - isolation, WebGPU,
+ * canvas count - at once and again after eight seconds, so a blank viewport can be told apart from
+ * a build that never booted.
  */
 public class MainActivity extends Activity {
-    /** The probe is bundled, so the check works with no network at all. */
     static final String PROBE = "file:///android_asset/probe.html";
-    /** Where the real thing lives, with the COOP/COEP headers its threads need. */
     static final String BLENDER_WEB = "https://developer.puter.com/labs/blender-web/";
 
-    /** What the loaded page reports about itself, in its own words. */
     static final String READBACK =
             "(function(){return 'page: isolated=' + self.crossOriginIsolated"
                     + " + ' gpu=' + (!!navigator.gpu)"
@@ -42,6 +39,7 @@ public class MainActivity extends Activity {
 
     private TextView status;
     private WebView web;
+    private PackServer server;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -71,7 +69,7 @@ public class MainActivity extends Activity {
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
-                if (url.startsWith(BLENDER_WEB)) readBack(view, 0);
+                if (url.startsWith(PackServer.ORIGIN)) readBack(view, 0);
                 else status.setText(summarise(url));
             }
         });
@@ -93,13 +91,31 @@ public class MainActivity extends Activity {
         web.loadUrl(PROBE);
     }
 
-    /** The point of the app: the web build, inside this app. */
+    /** Fetch what is missing, start serving it from loopback, open it in this WebView. */
     private void launchHere() {
-        status.setText(R.string.status_loading);
-        web.loadUrl(BLENDER_WEB);
+        say(getString(R.string.status_pack));
+        File packDir = new File(getFilesDir(), "pack");
+        new Thread(() -> {
+            try {
+                PackFetch.ensure(packDir, this::say);
+                if (server == null) {
+                    server = new PackServer(this, packDir);
+                    Thread t = new Thread(server, "pack-server-main");
+                    t.setDaemon(true);
+                    t.start();
+                }
+                say(getString(R.string.status_serving));
+                runOnUiThread(() -> web.loadUrl(PackServer.ORIGIN + "/"));
+            } catch (Exception e) {
+                say("pack failed: " + e);
+            }
+        }, "pack-fetch").start();
     }
 
-    /** Ask the page what it sees, now and again a little later. */
+    private void say(String message) {
+        runOnUiThread(() -> status.setText(message));
+    }
+
     private void readBack(WebView view, long delayMs) {
         view.postDelayed(() -> view.evaluateJavascript(READBACK, value -> {
             if (value != null && value.length() > 1 && value.startsWith("\"")) {
@@ -110,7 +126,6 @@ public class MainActivity extends Activity {
         if (delayMs == 0) readBack(view, 8000);
     }
 
-    /** What the probe page wrote into its own title, or why there is nothing to report yet. */
     private String summarise(String url) {
         String title = web.getTitle();
         if (title != null && title.startsWith("probe:")) return title;
@@ -118,7 +133,6 @@ public class MainActivity extends Activity {
                 : getString(R.string.status_probe);
     }
 
-    /** Only a fallback, for engines whose probe said no: never the default path. */
     private void openInChrome() {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(BLENDER_WEB))
@@ -129,6 +143,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (server != null) server.stop();
         if (web != null) web.destroy();
         super.onDestroy();
     }
