@@ -121,6 +121,19 @@ jobs:
           grep -q "decoding assets.tar.zst" single-dom.html
           grep -q "verified blender.wasm.zst" single-dom.html || echo "WARN: sha line not in dump (virtual-time race), device shows it"
           gh release upload blender-pack-v1 blender-lite-single.html --clobber || echo "release upload skipped"
+      - name: Four stage screenshots from file://, like a user opening the file
+        run: |
+          i=1
+          for B in 3000 60000 300000 900000; do
+            google-chrome --headless=new --no-sandbox --disable-gpu --enable-unsafe-swiftshader \
+              --user-data-dir=/tmp/shot$i --window-size=760,1200 --virtual-time-budget=$B \
+              --screenshot=stage$i.png "file://$PWD/blender-lite-single.html" >/dev/null 2>&1 || true
+            i=$((i+1))
+          done
+          ls -l stage?.png
+          test -s stage1.png && test -s stage4.png
+      - uses: actions/upload-artifact@v4
+        with: { name: single-stages, path: "stage*.png" }
       - uses: actions/upload-artifact@v4
         with: { name: single-file-dom, path: single-dom.html }
       - uses: actions/upload-artifact@v4
