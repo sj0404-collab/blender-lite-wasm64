@@ -94,3 +94,29 @@ jobs:
           test -s docs/icon-512.png
       - uses: actions/upload-artifact@v4
         with: { name: pwa-screenshot, path: pwa.png }
+
+  single:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the one-file html and smoke-test it from file://
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          mkdir -p payload && cd payload
+          B=https://github.com/$GITHUB_REPOSITORY/releases/download/blender-pack-v1
+          curl -sS -O $B/blender.wasm.zst -O $B/assets.tar.zst -O $B/wgsl-cache.json -O $B/manifest.json
+          cd ..
+          python3 tools/make_single_html.py blender-lite-single.html payload docs
+          test "$(stat -c%s blender-lite-single.html)" -gt 50000000
+          google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader \
+            --window-size=480,900 --virtual-time-budget=120000 \
+            --screenshot=single.png --dump-dom "file://$PWD/blender-lite-single.html" > single-dom.html || true
+          grep -q "verified blender.wasm.zst" single-dom.html
+          grep -q "verified assets.tar.zst" single-dom.html
+          gh release upload blender-pack-v1 blender-lite-single.html --clobber || echo "release upload skipped"
+      - uses: actions/upload-artifact@v4
+        with: { name: single-file-dom, path: single-dom.html }
+      - uses: actions/upload-artifact@v4
+        with: { name: single-file-screenshot, path: single.png }
