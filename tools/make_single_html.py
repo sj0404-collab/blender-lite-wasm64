@@ -89,6 +89,8 @@ boot = """
 </script>
 """ % (json.dumps(sums), json.dumps(sizes))
 
+html = re.sub(r'<script async src="https://plausible[^"]*"></script>', '', html)
+html = re.sub(r'<script>\s*window\.plausible.*?</script>', '', html, flags=re.S)
 html = html.replace('</head>', '<style>\n' + css + '\n</style>\n</head>')
 html = re.sub(r'<link rel="stylesheet"[^>]*>', '', html)
 html = html.replace('<link rel="manifest" href="manifest.webmanifest">', '')
