@@ -106,7 +106,7 @@ jobs:
           set -e
           mkdir -p payload && cd payload
           B=https://github.com/$GITHUB_REPOSITORY/releases/download/blender-pack-v1
-          curl -sS -O $B/blender.wasm.zst -O $B/assets.tar.zst -O $B/wgsl-cache.json -O $B/manifest.json
+          curl -sSL -O $B/blender.wasm.zst -O $B/assets.tar.zst -O $B/wgsl-cache.json -O $B/manifest.json
           cd ..
           python3 tools/make_single_html.py blender-lite-single.html payload docs
           test "$(stat -c%s blender-lite-single.html)" -gt 50000000
