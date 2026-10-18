@@ -84,7 +84,31 @@ boot = """
     }
     return native.apply(window, arguments);
   };
-  say('embedded payload: ' + Object.keys(SUMS).join(', ') + ', wgsl-cache.json');
+  addEventListener('error', function (e) { say('page error: ' + (e.message || e.type)); });
+  addEventListener('unhandledrejection', function (e) { say('rejection: ' + ((e.reason && e.reason.message) || e.reason)); });
+  var WI = WebAssembly.instantiate;
+  var t0 = 0;
+  var hb = -1;
+  WebAssembly.instantiate = function () {
+    var src = arguments[0];
+    var mb = (src && src.byteLength) ? (src.byteLength / 1048576).toFixed(1) : '?';
+    say('wasm instantiate start (' + mb + ' MB) - compiling is device work, minutes are normal');
+    t0 = Date.now();
+    return WI.apply(WebAssembly, arguments).then(function (r) {
+      say('wasm instantiated in ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s');
+      return r;
+    }, function (err) {
+      say('wasm instantiate FAILED: ' + ((err && err.message) || err));
+      throw err;
+    });
+  };
+  setInterval(function () {
+    if (!t0) return;
+    var line = 'waiting ' + Math.round((Date.now() - t0) / 1000) + ' s since wasm instantiate start';
+    if (hb < 0) { hb = lines.length; lines.push(line); } else { lines[hb] = line; }
+    draw();
+  }, 5000);
+  say('embedded payload: ' + Object.keys(SUMS).join(', '));
 })();
 </script>
 """ % (json.dumps(sums), json.dumps(sizes))
