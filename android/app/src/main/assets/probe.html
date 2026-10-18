@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>probe: starting</title>
+<style>
+  body { background:#10121a; color:#e8e8ee; font:14px/1.5 system-ui, sans-serif; margin:0; padding:16px }
+  h1 { font-size:16px; margin:0 0 12px }
+  table { border-collapse:collapse; width:100% }
+  td { border-bottom:1px solid #232634; padding:6px 4px; vertical-align:top }
+  td.k { color:#9aa0b4; width:44% }
+  .yes { color:#7ee787 } .no { color:#ff7b72 } .maybe { color:#e3b341 }
+  a { color:#79c0ff }
+</style>
+</head>
+<body>
+<h1>What this browser engine can do</h1>
+<table id="t"></table>
+<p><a id="go" href="https://developer.puter.com/labs/blender-web/">Open the Blender web build</a></p>
+<script>
+// The same keys the Android side reports for Vulkan, so the two can be compared line by line:
+// what a browser exposes, and what a desktop GPU application compiled to wasm actually needs.
+const rows = [];
+function put(k, v, cls) { rows.push('<tr><td class="k">' + k + '</td><td class="' + (cls||'') + '">' + v + '</td></tr>'); }
+function verdict(ok) { return ok ? ['yes', 'yes'] : ['no', 'no']; }
+
+async function main() {
+  put('user agent', navigator.userAgent);
+  put('crossOriginIsolated (threads need it)', ...verdict(self.crossOriginIsolated === true));
+
+  // memory64: the only way to address more than 4 GiB, which is what a real scene needs.
+  let mem64 = 'no';
+  try { new WebAssembly.Memory({ initial: 1, maximum: 2, indexType: 'i64' }); mem64 = 'yes'; } catch (e) { mem64 = 'no (' + e.name + ')'; }
+  put('wasm memory64', ...verdict(mem64 === 'yes')); put('', mem64);
+
+  let gl = null;
+  try { gl = document.createElement('canvas').getContext('webgl2'); } catch (e) {}
+  put('WebGL2', ...verdict(!!gl));
+  if (gl) {
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    put('renderer', dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    const bc = gl.getExtension('EXT_texture_compression_bptc') || gl.getExtension('WEBGL_compressed_texture_s3tc');
+    put('compressed textures (BC/S3TC)', ...verdict(!!bc));
+  }
+
+  if (!navigator.gpu) {
+    put('WebGPU', 'no', 'no');
+    put('verdict', 'Blender web build needs WebGPU: use the real Chrome', 'maybe');
+  } else {
+    put('WebGPU API', 'yes', 'yes');
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) { put('WebGPU adapter', 'none (software GPU refused)', 'no'); }
+      else {
+        const f = adapter.features;
+        put('adapter', adapter.isFallbackAdapter ? 'fallback (software)' : 'hardware', adapter.isFallbackAdapter ? 'maybe' : 'yes');
+        for (const feat of ['texture-compression-bc', 'texture-compression-astc', 'timestamp-query', 'rg11b10ufloat-renderable']) {
+          put('feature ' + feat, ...verdict(f.has(feat)));
+        }
+        const l = adapter.limits;
+        put('maxBufferSize', l.maxBufferSize.toLocaleString('en-US'));
+        put('maxStorageBuffersPerShaderStage', l.maxStorageBuffersPerShaderStage);
+        put('maxComputeWorkgroupSizeX', l.maxComputeWorkgroupSizeX);
+        const device = await adapter.requestDevice();
+        put('device', device ? 'acquired' : 'refused', device ? 'yes' : 'no');
+        put('verdict', 'WebGPU works here', 'yes');
+      }
+    } catch (e) {
+      put('WebGPU', 'failed: ' + e.message, 'no');
+      put('verdict', 'use the real Chrome', 'maybe');
+    }
+  }
+  put('deviceMemory (GB)', navigator.deviceMemory === undefined ? 'not reported' : navigator.deviceMemory);
+  put('hardwareConcurrency', navigator.hardwareConcurrency);
+  document.getElementById('t').innerHTML = rows.join('');
+  const gpu = rows.join('').indexOf('WebGPU works here') >= 0;
+  document.title = 'probe: webgpu=' + (gpu ? 'yes' : 'no') + ' mem64=' + (mem64 === 'yes') + ' isolated=' + (self.crossOriginIsolated === true);
+}
+main();
+</script>
+</body>
+</html>

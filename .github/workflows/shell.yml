@@ -1,0 +1,52 @@
+name: shell
+
+on:
+  push: { branches: [ main ] }
+  pull_request:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The runner has no GPU, so Chrome falls back to SwiftShader. That is the point: it shows what
+      # a software GPU reports, which is what CI can prove and what a phone with a real GPU will not.
+      - name: Run the probe page in headless Chrome
+        run: |
+          google-chrome --headless=new --disable-gpu --no-sandbox --enable-unsafe-swiftshader \
+            --window-size=720,1280 --virtual-time-budget=20000 \
+            --screenshot=probe.png --dump-dom \
+            "file://$PWD/android/app/src/main/assets/probe.html" > dom.html 2>chrome.log || true
+          echo "--- title ---"; grep -o "<title>[^<]*</title>" dom.html || true
+          echo "--- rows ---"; sed -e 's/<[^>]*>/ /g' dom.html | tr -s ' \n' ' \n' | grep -iE "webgpu|memory64|isolated|renderer|compressed|verdict|deviceMemory|hardwareConc" | head -30
+      - name: The page must report something rather than crash
+        run: |
+          test -s dom.html
+          grep -q "What this browser engine can do" dom.html
+          grep -qiE "webgpu" dom.html
+      - uses: actions/upload-artifact@v4
+        with: { name: probe-screenshot, path: probe.png }
+      - uses: actions/upload-artifact@v4
+        with: { name: probe-dom, path: dom.html }
+
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.9' }
+      - name: Build the shell
+        working-directory: android
+        run: gradle --no-daemon --console=plain assembleDebug
+      - name: The APK carries the probe and no Blender
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -l "$APK" | grep -E "classes.dex|assets/probe.html|AndroidManifest.xml"
+          echo "size: $(stat -c%s "$APK") bytes"
+          # The shell must stay a shell: nothing here should be tens of megabytes of Blender.
+          test "$(stat -c%s "$APK")" -lt 5000000
+      - uses: actions/upload-artifact@v4
+        with: { name: blender-lite-shell-apk, path: android/app/build/outputs/apk/debug/app-debug.apk }

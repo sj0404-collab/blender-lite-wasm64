@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Blender Lite (web shell)</string>
+    <string name="status_probe">Checking what this browser engine can do…</string>
+    <string name="open_chrome">Open in Chrome</string>
+    <string name="reload">Run the check again</string>
+</resources>
