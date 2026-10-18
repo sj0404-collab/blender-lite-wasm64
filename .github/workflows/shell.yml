@@ -117,7 +117,7 @@ jobs:
           sed -e 's/<[^>]*>/ /g' single-dom.html | tr -s ' \n' ' \n' | head -c 1200
           echo; echo "--- console ---"
           grep -iE "CONSOLE|Uncaught|failed|FAIL" chrome.log | cut -c1-200 | head -25
-          grep -q "decoding blender.wasm.zst" single-dom.html
+          grep -q "decoding blender.wasm.zst" single-dom.html || { echo "--- dump overlay ---"; grep -oE -e "single file[^<]*" -e "decoding[^<]*" -e "verified[^<]*" -e "page error[^<]*" -e "rejection[^<]*" -e "wasm instantiate[^<]*" single-dom.html | head -8; echo "--- dump console ---"; grep -iE "CONSOLE" chrome.log | cut -c1-180 | head -10; exit 1; }
           grep -q "decoding assets.tar.zst" single-dom.html
           grep -q "verified blender.wasm.zst" single-dom.html || echo "WARN: sha line not in dump (virtual-time race), device shows it"
           gh release upload blender-pack-v1 blender-lite-single.html --clobber || echo "release upload skipped"
