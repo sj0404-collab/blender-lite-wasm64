@@ -58,6 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
+      - uses: actions/checkout@v4
       - name: Mirror the Blender web payload into a release of this repo
         env:
           GH_TOKEN: ${{ github.token }}
