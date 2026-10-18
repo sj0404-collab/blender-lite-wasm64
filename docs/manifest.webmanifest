@@ -1,0 +1,14 @@
+{
+  "name": "Blender Lite (web shell)",
+  "short_name": "BlenderLite",
+  "description": "The Blender web build, served from this origin with its payload cached on the device.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10121a",
+  "theme_color": "#10121a",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

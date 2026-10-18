@@ -75,3 +75,21 @@ jobs:
           gh release create blender-pack-v1 manifest.json blender.wasm.zst assets.tar.zst wgsl-cache.json \
             --title "Blender web payload mirror" \
             --notes "Mirror of the puter Blender-web payload (upstream: heyputer/blender-wasm, GPL) so the Android shell can serve it from its own origin when the upstream host is unreachable."
+
+  pwa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Serve the PWA locally and load it in headless Chrome
+        run: |
+          (cd docs && python3 -m http.server 8000 --bind 127.0.0.1 &)
+          sleep 2
+          google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader \
+            --window-size=480,800 --virtual-time-budget=15000 \
+            --screenshot=pwa.png --dump-dom http://127.0.0.1:8000/ > pwa-dom.html || true
+          grep -q "manifest.webmanifest" pwa-dom.html
+          grep -q "sw.js" pwa-dom.html
+          grep -q "Cross-Origin-Embedder-Policy" docs/sw.js
+          test -s docs/icon-512.png
+      - uses: actions/upload-artifact@v4
+        with: { name: pwa-screenshot, path: pwa.png }
