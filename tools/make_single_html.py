@@ -59,7 +59,7 @@ boot = """
   box.style.maxHeight = '38vh';
   box.style.overflow = 'auto';
   box.addEventListener('click', function () { expanded = !expanded; draw(); });
-  function say(t) { lines.push(t); draw(); }
+  function say(t) { lines.push(t); if (lines.length > 400) lines.shift(); if (!dirty) { dirty = true; setTimeout(function () { dirty = false; draw(); }, 100); } }
   draw();
   var blobs = {};
   async function decode(name) {
@@ -120,11 +120,18 @@ boot = """
   document.addEventListener('resume', function () { lastTick = Date.now(); say('tab resumed by Android'); });
   document.addEventListener('visibilitychange', function () { lastTick = Date.now(); say('visibility: ' + document.visibilityState); });
   var CL = console.log.bind(console);
+  var mirrored = 0;
+  var dirty = false;
   console.log = function () {
     var a = Array.prototype.slice.call(arguments).map(function (x) {
       try { return typeof x === 'string' ? x : JSON.stringify(x); } catch (e) { return String(x); }
     }).join(' ');
-    if (a.length && a.length < 200) say('[blender] ' + a);
+    if (a.length && a.length < 160 && mirrored < 40 && /phase|adapter|device|shader|wgsl|cache|error|fail|load|index|wasm|webgpu/i.test(a)) {
+      mirrored++;
+      lines.push('[blender] ' + a);
+      if (lines.length > 400) lines.shift();
+      if (!dirty) { dirty = true; setTimeout(function () { dirty = false; draw(); }, 250); }
+    }
     CL.apply(console, arguments);
   };
   setInterval(function () {
