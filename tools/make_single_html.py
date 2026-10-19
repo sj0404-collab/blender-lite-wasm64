@@ -116,9 +116,22 @@ boot = """
     });
   };
   var lastTick = Date.now();
+  document.addEventListener('freeze', function () { say('tab frozen by Android (timers stop; this is not computation)'); });
+  document.addEventListener('resume', function () { lastTick = Date.now(); say('tab resumed by Android'); });
+  document.addEventListener('visibilitychange', function () { lastTick = Date.now(); say('visibility: ' + document.visibilityState); });
+  var CL = console.log.bind(console);
+  console.log = function () {
+    var a = Array.prototype.slice.call(arguments).map(function (x) {
+      try { return typeof x === 'string' ? x : JSON.stringify(x); } catch (e) { return String(x); }
+    }).join(' ');
+    if (a.length && a.length < 200) say('[blender] ' + a);
+    CL.apply(console, arguments);
+  };
   setInterval(function () {
     var now = Date.now();
-    if (now - lastTick > 8000) say('main thread was busy ~' + Math.round((now - lastTick) / 1000) + ' s (sync decompress/index inside the wrapper)');
+    var gap = now - lastTick;
+    if (gap > 60000) say('gap ' + Math.round(gap / 1000) + ' s: device slept or tab was frozen (not computation)');
+    else if (gap > 8000) say('main thread was busy ~' + Math.round(gap / 1000) + ' s (sync decompress/index inside the wrapper)');
     lastTick = now;
     if (!t0) return;
     var line = 'waiting ' + Math.round((now - t0) / 1000) + ' s since wasm instantiate start';
